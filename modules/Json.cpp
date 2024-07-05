@@ -122,11 +122,6 @@ struct SmartPrinter {
         return *this;
     }
 
-    SmartPrinter &commaSpace() {
-        ss << ", ";
-        return *this;
-    }
-
     SmartPrinter &make_indent() {
         for (size_t i = 0; i < indent; i++) {
             for (size_t j = 0; j < indentSize; j++) {
@@ -136,7 +131,7 @@ struct SmartPrinter {
         return *this;
     }
 
-    struct indentGuard {
+/*    struct indentGuard {
         indentGuard() = delete;
 
         explicit indentGuard(SmartPrinter &printer) : printer(printer) {
@@ -148,6 +143,27 @@ struct SmartPrinter {
         }
 
         SmartPrinter &printer;
+    };*/
+
+    struct IndentPrintGuard {
+        IndentPrintGuard() = delete;
+
+        const char left, right;
+
+        SmartPrinter &printer;
+
+        IndentPrintGuard(const char left, const char right, SmartPrinter &printer) : left(left), right(right),
+                                                                                     printer(printer) {
+            printer << left;
+            printer.indent++;
+            printer.nextLine();
+        }
+
+        ~IndentPrintGuard() {
+            printer.indent--;
+            printer.nextLine();
+            printer << right;
+        }
     };
 
     SmartPrinter &operator<<(const std::string &str) {
@@ -185,33 +201,28 @@ struct SmartPrinter {
     }
 
     SmartPrinter &operator()(this SmartPrinter &self, const Map &map) {
-        self << "{";
-        {
-            indentGuard guard{self};
-            self.nextLine();
-            size_t i = 0;
-            const size_t lastIndex = map.size() - 1;
-            for (auto &&[K, V]: map) {
-                (self << '"' << K << '"').colonSpace().autoAppend(*V);
-                if (i++ != lastIndex) self.commaNextLine();
-            }
+        IndentPrintGuard guard{'{', '}', self};
+
+        size_t i = 0;
+        const size_t lastIndex = map.size() - 1;
+        for (auto &&[K, V]: map) {
+            (self << '"' << K << '"').colonSpace().autoAppend(*V);
+            if (i++ != lastIndex) self.commaNextLine();
         }
-        return self.nextLine() << '}';
+
+        return self;
     }
 
     SmartPrinter &operator()(this SmartPrinter &self, const Array &array) {
-        self << '[';
-        {
-            indentGuard guard{self};
-            self.nextLine();
-            for (size_t i = 0; i < array.size() - 1; i++) {
-                self.autoAppend(*array[i]);
-                self.commaNextLine();
-            }
-            self.autoAppend(*array.back());
-        }
+        IndentPrintGuard guard{'[', ']', self};
 
-        return self.nextLine() << ']';
+        for (size_t i = 0; i < array.size() - 1; i++) {
+            self.autoAppend(*array[i]);
+            self.commaNextLine();
+        }
+        self.autoAppend(*array.back());
+
+        return self;
     }
 
     SmartPrinter &operator()(this SmartPrinter &self, const Number number) {

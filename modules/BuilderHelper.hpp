@@ -66,4 +66,4 @@ namespace n_BuilderHelper {
     std::nullptr_t BuilderHelper::next<std::nullptr_t>();
 
     std::string readFileIntoString(const std::string &filename);
-};
+}
