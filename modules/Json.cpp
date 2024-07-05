@@ -5,6 +5,10 @@
 #include <map>
 #include "Json.hpp"
 
+using namespace n_Json;
+using namespace n_BuilderHelper;
+//using namespace n_Json::JsonContexts;
+
 JsonBuilder &JsonBuilder::setString(const std::string &string) {
     helper = std::make_unique<BuilderHelper>(string);
     return *this;
@@ -15,14 +19,14 @@ JsonBuilder &JsonBuilder::setString(std::string &&string) {
     return *this;
 }
 
-JsonNode JsonBuilder::build() {
+std::shared_ptr<JsonNode> JsonBuilder::build() {
     if (helper->expect() != ExpectType::OBJECT_Start)
         throw std::runtime_error("Invalid Json Format, cannot find the start of the object '{'");
     helper->ready();
     return nextObject();
 }
 
-JsonNode JsonBuilder::nextObject() {
+std::shared_ptr<JsonNode> JsonBuilder::nextObject() {
     Map map; // create a map to store the key value pair
     // read K, V until we reach the end of the object
 
@@ -42,30 +46,27 @@ JsonNode JsonBuilder::nextObject() {
                 map[std::move(key)] = nextArray();
                 break;
             case ExpectType::STRING:
-                map[std::move(key)] = JsonNode(
-                        JsonType::STRING, std::make_shared<StringDataHolder>(helper->next<std::string>()));
+                map[std::move(key)] = std::make_shared<StringNode>(helper->next<String>());
                 break;
             case ExpectType::NUMBER:
-                map[std::move(key)] = JsonNode(
-                        JsonType::NUMBER, std::make_shared<NumberDataHolder>(helper->next<double>()));
+                map[std::move(key)] = std::make_shared<NumberNode>(helper->next<Number>());
                 break;
             case ExpectType::BOOL:
-                map[std::move(key)] = JsonNode(
-                        JsonType::BOOL, std::make_shared<BoolDataHolder>(helper->next<bool>()));
+                map[std::move(key)] = std::make_shared<BoolNode>(helper->next<Bool>());
                 break;
             case ExpectType::NULLPTR:
-                map[std::move(key)] = JsonNode(JsonType::NULLPTR, helper->next<nullptr_t>());
+                map[std::move(key)] = std::make_shared<NullNode>(helper->next<NullPtr>());
                 break;
             default:
                 throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
         }
     }
     helper->nextChar();
-    return JsonNode{JsonType::OBJECT, std::make_shared<ObjectDataHolder>(std::move(map))};
+    return std::make_shared<ObjectNode>(std::move(map));
 }
 
-JsonNode JsonBuilder::nextArray() {
-    std::vector<JsonNode> array;
+std::shared_ptr<JsonNode> JsonBuilder::nextArray() {
+    Array array;
 
     helper->nextChar();
 
@@ -79,26 +80,23 @@ JsonNode JsonBuilder::nextArray() {
                 array.push_back(nextArray());
                 break;
             case ExpectType::STRING:
-                array.emplace_back(
-                        JsonType::STRING, std::make_shared<StringDataHolder>(helper->next<std::string>()));
+                array.push_back(std::make_shared<StringNode>(helper->next<String>()));
                 break;
             case ExpectType::NUMBER:
-                array.emplace_back(
-                        JsonType::NUMBER, std::make_shared<NumberDataHolder>(helper->next<double>()));
+                array.push_back(std::make_shared<NumberNode>(helper->next<Number>()));
                 break;
             case ExpectType::BOOL:
-                array.emplace_back(
-                        JsonType::BOOL, std::make_shared<BoolDataHolder>(helper->next<bool>()));
+                array.push_back(std::make_shared<BoolNode>(helper->next<Bool>()));
                 break;
             case ExpectType::NULLPTR:
-                array.emplace_back(JsonType::NULLPTR, std::make_shared<NullDataHolder>());
+                array.push_back(std::make_shared<NullNode>(helper->next<NullPtr>()));
                 break;
             default:
                 throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
         }
     }
     helper->nextChar();
-    return JsonNode{JsonType::ARRAY, std::make_shared<ArrayDataHolder>(std::move(array))};
+    return std::make_shared<ArrayNode>(std::move(array));
 }
 
 struct SmartPrinter {
@@ -168,68 +166,68 @@ struct SmartPrinter {
     }
 
     SmartPrinter &autoAppend(this SmartPrinter &self, const JsonNode &node) {
-        switch (node.type) {
+        switch (node.getContext().getType()) {
             case JsonType::OBJECT:
-                return self((ObjectDataHolder &) *node.data);
+                return self(node.getData<Map>());
             case JsonType::ARRAY:
-                return self((ArrayDataHolder &) *node.data);
+                return self(node.getData<Array>());
             case JsonType::STRING:
-                return self((StringDataHolder &) *node.data);
+                return self(node.getData<String>());
             case JsonType::NUMBER:
-                return self((NumberDataHolder &) *node.data);
+                return self(node.getData<Number>());
             case JsonType::BOOL:
-                return self((BoolDataHolder &) *node.data);
+                return self(node.getData<Bool>());
             case JsonType::NULLPTR:
-                return self((NullDataHolder &) *node.data);
+                return self(node.getData<NullPtr>());
             default:
                 throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
         }
     }
 
-    SmartPrinter &operator()(this SmartPrinter &self, const ObjectDataHolder &dataHolder) {
+    SmartPrinter &operator()(this SmartPrinter &self, const Map &map) {
         self << "{";
         {
             indentGuard guard{self};
             self.nextLine();
             size_t i = 0;
-            const size_t lastIndex = dataHolder.getData().size() - 1;
-            for (auto &&[K, V]: dataHolder.getData()) {
-                (self << '"' << K << '"').colonSpace().autoAppend(V);
+            const size_t lastIndex = map.size() - 1;
+            for (auto &&[K, V]: map) {
+                (self << '"' << K << '"').colonSpace().autoAppend(*V);
                 if (i++ != lastIndex) self.commaNextLine();
             }
         }
         return self.nextLine() << '}';
     }
 
-    SmartPrinter &operator()(this SmartPrinter &self, const ArrayDataHolder &dataHolder) {
+    SmartPrinter &operator()(this SmartPrinter &self, const Array &array) {
         self << '[';
         {
             indentGuard guard{self};
             self.nextLine();
-            for (size_t i = 0; i < dataHolder.getData().size() - 1; i++) {
-                self.autoAppend(dataHolder.getData()[i]);
+            for (size_t i = 0; i < array.size() - 1; i++) {
+                self.autoAppend(*array[i]);
                 self.commaNextLine();
             }
-            self.autoAppend(dataHolder.getData().back());
+            self.autoAppend(*array.back());
         }
 
         return self.nextLine() << ']';
     }
 
-    SmartPrinter &operator()(this SmartPrinter &self, const NumberDataHolder &dataHolder) {
-        return self << dataHolder.getData();
+    SmartPrinter &operator()(this SmartPrinter &self, const Number number) {
+        return self << number;
     }
 
-    SmartPrinter &operator()(this SmartPrinter &self, const BoolDataHolder &dataHolder) {
-        self.ss << std::boolalpha << dataHolder.getData();
+    SmartPrinter &operator()(this SmartPrinter &self, const Bool val) {
+        self.ss << std::boolalpha << val;
         return self;
     }
 
-    SmartPrinter &operator()(this SmartPrinter &self, const NullDataHolder &dataHolder) {
+    SmartPrinter &operator()(this SmartPrinter &self, const NullPtr nullPtr) {
         return self << "null";
     }
 
-    SmartPrinter &operator()(this SmartPrinter &self, const StringDataHolder &dataHolder) {
+    SmartPrinter &operator()(this SmartPrinter &self, const String &string) {
         static const std::map<char, std::string> escapeMap = {
                 {'\n', "\\n"},
                 {'\r', "\\r"},
@@ -240,11 +238,11 @@ struct SmartPrinter {
         };
 
         self << '"';
-        for (size_t i = 0; i < dataHolder.getData().size(); i++) {
-            if (escapeMap.find(dataHolder.getData()[i]) != escapeMap.end()) {
-                self << escapeMap.at(dataHolder.getData()[i]);
+        for (char i: string) {
+            if (escapeMap.find(i) != escapeMap.end()) {
+                self << escapeMap.at(i);
             } else {
-                self << dataHolder.getData()[i];
+                self << i;
             }
         }
         return self << '"';

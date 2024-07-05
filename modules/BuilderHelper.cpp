@@ -6,6 +6,8 @@
 #include <unordered_set>
 #include "BuilderHelper.hpp"
 
+using namespace n_BuilderHelper;
+
 ExpectType BuilderHelper::expect() {
     using namespace std::string_literals;
     // try to read the next token and return the type of the token

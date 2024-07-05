@@ -2,6 +2,8 @@
 #include "modules/Json.hpp"
 
 int main() {
+    using namespace n_Json;
+    using namespace n_BuilderHelper;
     std::cout << "Please enter the path to the file, relative to the current directory: ";
     std::string path;
     JsonBuilder builder;
@@ -13,7 +15,7 @@ int main() {
         return 1;
     }
 
-    JsonNode node;
+    std::shared_ptr<JsonNode> node;
 
     try {
         node = builder.build();
@@ -22,5 +24,5 @@ int main() {
         return 1;
     }
 
-    std::cout << node.toString();
+    std::cout << node->toString() << std::endl;
 }
