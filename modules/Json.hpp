@@ -4,122 +4,215 @@
 #include <memory>
 #include <unordered_map>
 #include <map>
+#include <variant>
+#include <iostream>
 #include "BuilderHelper.hpp"
 
-class JsonNode;
+namespace n_Json {
 
-using Map = std::map<std::string, JsonNode>;
+    class JsonNode;
 
-enum class JsonType {
-    OBJECT,
-    ARRAY,
-    STRING,
-    NUMBER,
-    BOOL,
-    NULLPTR,
-    UNINITIALIZED
-};
+    using Map = std::map<std::string, std::shared_ptr<JsonNode>>;
+    using Array = std::vector<std::shared_ptr<JsonNode>>;
+    using Number = double;
+    using String = std::string;
+    using NullPtr = nullptr_t;
+    using Bool = bool;
 
-class DataHolder {
-};
+    using DataVariant = std::variant<String, Map, Array, Number, Bool, NullPtr>;
 
-class JsonNode {
-public:
-    JsonNode() : type(JsonType::UNINITIALIZED), data(nullptr) {}
-
-    JsonType type;
-    std::shared_ptr<DataHolder> data;
-
-    JsonNode(JsonType type, const std::shared_ptr<DataHolder> &data) : type(type), data(data) {}
-
-    JsonNode(JsonType type, std::shared_ptr<DataHolder> &&data) : type(type), data(std::move(data)) {}
-
-    [[nodiscard]] std::string toString() const;
-};
-
-class StringDataHolder : public DataHolder {
-private:
-    std::string data;
-public:
-    decltype(auto) getData(this auto &&self) {
-        return self.data;
+    enum class JsonType {
+        OBJECT,
+        ARRAY,
+        STRING,
+        NUMBER,
+        BOOL,
+        NULLPTR,
+        UNINITIALIZED
     };
 
-    explicit StringDataHolder(const std::string &data) : data(data) {}
+    struct JsonContext {
+    private:
+        JsonType type;
 
-    explicit StringDataHolder(std::string &&data) : data(std::move(data)) {}
-};
+    public:
+        JsonType getType() const {
+            return type;
+        }
 
-class NumberDataHolder : public DataHolder {
-private:
-    double data;
-public:
-    decltype(auto) getData(this auto &&self) {
-        return self.data;
+        JsonContext() : type(JsonType::UNINITIALIZED) {}
+
+        explicit JsonContext(const JsonType type) : type(type) {}
     };
 
-    explicit NumberDataHolder(double data) : data(data) {}
-};
+/*    class JsonContexts {
+    private:
+        JsonContexts() = default;
 
-class BoolDataHolder : public DataHolder {
-private:
-    bool data;
-public:
-    decltype(auto) getData(this auto &&self) {
-        return self.data;
+        const JsonContext objectContext = JsonContext{JsonType::OBJECT};
+        const JsonContext arrayContext = JsonContext{JsonType::ARRAY};
+        const JsonContext stringContext = JsonContext{JsonType::STRING};
+        const JsonContext numberContext = JsonContext{JsonType::NUMBER};
+        const JsonContext boolContext = JsonContext{JsonType::BOOL};
+        const JsonContext nullptrContext = JsonContext{JsonType::NULLPTR};
+
+    public:
+        static JsonContexts& getInstance() {
+            static JsonContexts instance;
+            return instance;
+        }
+
+        [[nodiscard]] const JsonContext& getObjectContext() const {
+            return objectContext;
+        }
+
+        [[nodiscard]] const JsonContext& getArrayContext() const {
+            return arrayContext;
+        }
+
+        [[nodiscard]] const JsonContext& getStringContext() const {
+            return stringContext;
+        }
+
+        [[nodiscard]] const JsonContext& getNumberContext() const {
+            return numberContext;
+        }
+
+        [[nodiscard]] const JsonContext& getBoolContext() const {
+            return boolContext;
+        }
+
+        [[nodiscard]] const JsonContext& getNullptrContext() const {
+            return nullptrContext;
+        }
+    };*/
+
+    class JsonNode {
+    protected:
+        DataVariant data;
+
+    public:
+        template<typename T>
+        decltype(auto) getData(this auto &&self) {
+            return std::get<T>(self.data);
+        }
+
+        JsonNode(const JsonNode &) = default;
+
+        JsonNode &operator=(const JsonNode &) = default;
+
+        JsonNode(JsonNode &&) = default;
+
+        JsonNode &operator=(JsonNode &&) = default;
+
+        JsonNode() = default;
+
+        virtual JsonContext getContext() const {
+            std::unreachable();
+        }
+
+        virtual ~JsonNode() = default;
+
+        [[nodiscard]] std::string toString() const;
     };
 
-    explicit BoolDataHolder(bool data) : data(data) {}
-};
+    class ObjectNode : public JsonNode {
+    public:
+        JsonContext getContext() const override {
+            return JsonContext{JsonType::OBJECT};
+        }
 
-class NullDataHolder : public DataHolder {
-public:
-    [[nodiscard]] static nullptr_t getData() {
-        return nullptr;
+        explicit ObjectNode(const Map &data) {
+            this->data = data;
+        }
+
+        explicit ObjectNode(Map &&data) {
+            this->data = std::move(data);
+        }
     };
 
-    NullDataHolder() = default;
-};
+    class ArrayNode : public JsonNode {
+    public:
+        JsonContext getContext() const override {
+            return JsonContext{JsonType::ARRAY};
+        }
 
-class ArrayDataHolder : public DataHolder {
-private:
-    std::vector<JsonNode> data;
-public:
-    decltype(auto) getData(this auto &&self) {
-        return self.data;
-    }
+        explicit ArrayNode(const Array &data) {
+            this->data = data;
+        }
 
-    explicit ArrayDataHolder(const std::vector<JsonNode> &data) : data(data) {}
-
-    explicit ArrayDataHolder(std::vector<JsonNode> &&data) : data(std::move(data)) {}
-};
-
-class ObjectDataHolder : public DataHolder {
-private:
-    Map data;
-public:
-    [[nodiscard]] decltype(auto) getData(this auto &&self) {
-        return self.data;
+        explicit ArrayNode(Array &&data) {
+            this->data = std::move(data);
+        }
     };
 
-    explicit ObjectDataHolder(const Map &data) : data(data) {}
+    class StringNode : public JsonNode {
+    public:
+        JsonContext getContext() const override {
+            return JsonContext{JsonType::STRING};
+        }
 
-    explicit ObjectDataHolder(Map &&data) : data(std::move(data)) {}
-};
+        explicit StringNode(const String &data) {
+            this->data = data;
+        }
 
-class JsonBuilder {
-private:
-    std::unique_ptr<BuilderHelper> helper;
-public:
-    JsonBuilder() = default;
+        explicit StringNode(String &&data) {
+            this->data = std::move(data);
+        }
+    };
 
-    JsonBuilder &setString(const std::string &string);
+    class NumberNode : public JsonNode {
+    public:
+        JsonContext getContext() const override {
+            return JsonContext{JsonType::NUMBER};
+        }
 
-    JsonBuilder &setString(std::string &&string);
+        explicit NumberNode(const Number data) {
+            this->data = data;
+        }
+    };
 
-    JsonNode build();
+    class BoolNode : public JsonNode {
+    public:
+        JsonContext getContext() const override {
+            return JsonContext{JsonType::BOOL};
+        }
 
-    JsonNode nextObject();
+        explicit BoolNode(const Bool data) {
+            this->data = data;
+        }
+    };
 
-    JsonNode nextArray();
-};
+    class NullNode : public JsonNode {
+    public:
+        JsonContext getContext() const override {
+            return JsonContext{JsonType::NULLPTR};
+        }
+
+        explicit NullNode(const NullPtr data) {
+            this->data = data;
+        }
+
+        NullNode() {
+            this->data = nullptr;
+        }
+    };
+
+
+    class JsonBuilder {
+    private:
+        std::unique_ptr<n_BuilderHelper::BuilderHelper> helper;
+    public:
+        JsonBuilder() = default;
+
+        JsonBuilder &setString(const std::string &string);
+
+        JsonBuilder &setString(std::string &&string);
+
+        std::shared_ptr<JsonNode> build();
+
+        std::shared_ptr<JsonNode> nextObject();
+
+        std::shared_ptr<JsonNode> nextArray();
+    };
+}
