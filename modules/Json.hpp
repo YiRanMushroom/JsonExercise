@@ -6,30 +6,10 @@
 #include <map>
 #include <variant>
 #include <iostream>
+#include "JsonForwardDeclarations.hpp"
 #include "BuilderHelper.hpp"
 
 namespace n_Json {
-
-    class JsonNode;
-
-    using Map = std::map<std::string, std::shared_ptr<JsonNode>>;
-    using Array = std::vector<std::shared_ptr<JsonNode>>;
-    using Number = double;
-    using String = std::string;
-    using NullPtr = nullptr_t;
-    using Bool = bool;
-
-    using DataVariant = std::variant<String, Map, Array, Number, Bool, NullPtr>;
-
-    enum class JsonType {
-        OBJECT,
-        ARRAY,
-        STRING,
-        NUMBER,
-        BOOL,
-        NULLPTR,
-        UNINITIALIZED
-    };
 
     struct JsonContext {
     private:
@@ -44,48 +24,6 @@ namespace n_Json {
 
         explicit JsonContext(const JsonType type) : type(type) {}
     };
-
-/*    class JsonContexts {
-    private:
-        JsonContexts() = default;
-
-        const JsonContext objectContext = JsonContext{JsonType::OBJECT};
-        const JsonContext arrayContext = JsonContext{JsonType::ARRAY};
-        const JsonContext stringContext = JsonContext{JsonType::STRING};
-        const JsonContext numberContext = JsonContext{JsonType::NUMBER};
-        const JsonContext boolContext = JsonContext{JsonType::BOOL};
-        const JsonContext nullptrContext = JsonContext{JsonType::NULLPTR};
-
-    public:
-        static JsonContexts& getInstance() {
-            static JsonContexts instance;
-            return instance;
-        }
-
-        [[nodiscard]] const JsonContext& getObjectContext() const {
-            return objectContext;
-        }
-
-        [[nodiscard]] const JsonContext& getArrayContext() const {
-            return arrayContext;
-        }
-
-        [[nodiscard]] const JsonContext& getStringContext() const {
-            return stringContext;
-        }
-
-        [[nodiscard]] const JsonContext& getNumberContext() const {
-            return numberContext;
-        }
-
-        [[nodiscard]] const JsonContext& getBoolContext() const {
-            return boolContext;
-        }
-
-        [[nodiscard]] const JsonContext& getNullptrContext() const {
-            return nullptrContext;
-        }
-    };*/
 
     class JsonNode {
     protected:
@@ -122,11 +60,11 @@ namespace n_Json {
             return JsonContext{JsonType::OBJECT};
         }
 
-        explicit ObjectNode(const Map &data) {
+        explicit ObjectNode(const Object &data) {
             this->data = data;
         }
 
-        explicit ObjectNode(Map &&data) {
+        explicit ObjectNode(Object &&data) {
             this->data = std::move(data);
         }
     };
@@ -210,9 +148,5 @@ namespace n_Json {
         JsonBuilder &setString(std::string &&string);
 
         std::shared_ptr<JsonNode> build();
-
-        std::shared_ptr<JsonNode> nextObject();
-
-        std::shared_ptr<JsonNode> nextArray();
     };
 }

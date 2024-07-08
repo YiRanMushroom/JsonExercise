@@ -4,36 +4,24 @@
 #include <unordered_map>
 #include <fstream>
 #include <sstream>
+#include <functional>
+#include "JsonForwardDeclarations.hpp"
 
 namespace n_BuilderHelper {
-
-    enum class ExpectType {
-        OBJECT_Start,
-        OBJECT_End,
-        ARRAY_Start,
-        ARRAY_End,
-        STRING,
-        NUMBER,
-        BOOL,
-        NULLPTR
-    };
-
     class BuilderHelper {
     public:
-        explicit BuilderHelper(const std::string &string) : string(string) {}
+        explicit BuilderHelper(const std::string &string) : shardString(std::make_shared<std::string>(string)) {}
 
-        explicit BuilderHelper(std::string &&string) : string(std::move(string)) {}
+        explicit BuilderHelper(std::string &&string) : shardString(std::make_shared<std::string>(std::move(string))) {}
 
         ExpectType expect();
 
-        template<typename R>
-        R next() {
+        template<typename T>
+        void next(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
             std::unreachable();
         }
 
         void skip();
-
-        const static std::unordered_map<char, char> escapeMap;
 
         static char getEscape(char c);
 
@@ -41,29 +29,43 @@ namespace n_BuilderHelper {
 
         void nextChar();
 
+        std::string readString();
+
+        [[nodiscard]] const char &now() const;
+
+        std::string &getString() {
+            return *shardString;
+        }
+
     private:
-        std::string string;
+        std::shared_ptr<std::string> shardString;
 
         size_t at = 0;
 
     public:
         BuilderHelper() = delete;
 
-        BuilderHelper(BuilderHelper &) = delete;
+        BuilderHelper(BuilderHelper &) = default;
 
     };
 
     template<>
-    double BuilderHelper::next<double>();
+    void BuilderHelper::next<double>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
 
     template<>
-    std::string BuilderHelper::next<std::string>();
+    void BuilderHelper::next<std::string>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
 
     template<>
-    bool BuilderHelper::next<bool>();
+    void BuilderHelper::next<bool>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
 
     template<>
-    std::nullptr_t BuilderHelper::next<std::nullptr_t>();
+    void BuilderHelper::next<n_Json::Object>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+
+    template<>
+    void BuilderHelper::next<n_Json::Array>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+
+    template<>
+    void BuilderHelper::next<std::nullptr_t>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
 
     std::string readFileIntoString(const std::string &filename);
 }

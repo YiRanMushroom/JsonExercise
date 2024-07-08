@@ -23,80 +23,11 @@ std::shared_ptr<JsonNode> JsonBuilder::build() {
     if (helper->expect() != ExpectType::OBJECT_Start)
         throw std::runtime_error("Invalid Json Format, cannot find the start of the object '{'");
     helper->ready();
-    return nextObject();
-}
-
-std::shared_ptr<JsonNode> JsonBuilder::nextObject() {
-    Map map; // create a map to store the key value pair
-    // read K, V until we reach the end of the object
-
-    helper->nextChar();
-
-    while (helper->expect() != ExpectType::OBJECT_End) {
-        helper->ready();
-        // read key
-        std::string key = helper->next<std::string>();
-        // ready for read the value.
-        helper->ready();
-        switch (helper->expect()) {
-            case ExpectType::OBJECT_Start:
-                map[std::move(key)] = nextObject();
-                break;
-            case ExpectType::ARRAY_Start:
-                map[std::move(key)] = nextArray();
-                break;
-            case ExpectType::STRING:
-                map[std::move(key)] = std::make_shared<StringNode>(helper->next<String>());
-                break;
-            case ExpectType::NUMBER:
-                map[std::move(key)] = std::make_shared<NumberNode>(helper->next<Number>());
-                break;
-            case ExpectType::BOOL:
-                map[std::move(key)] = std::make_shared<BoolNode>(helper->next<Bool>());
-                break;
-            case ExpectType::NULLPTR:
-                map[std::move(key)] = std::make_shared<NullNode>(helper->next<NullPtr>());
-                break;
-            default:
-                throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
-        }
-    }
-    helper->nextChar();
-    return std::make_shared<ObjectNode>(std::move(map));
-}
-
-std::shared_ptr<JsonNode> JsonBuilder::nextArray() {
-    Array array;
-
-    helper->nextChar();
-
-    while (helper->expect() != ExpectType::ARRAY_End) {
-        helper->ready();
-        switch (helper->expect()) {
-            case ExpectType::OBJECT_Start:
-                array.push_back(nextObject());
-                break;
-            case ExpectType::ARRAY_Start:
-                array.push_back(nextArray());
-                break;
-            case ExpectType::STRING:
-                array.push_back(std::make_shared<StringNode>(helper->next<String>()));
-                break;
-            case ExpectType::NUMBER:
-                array.push_back(std::make_shared<NumberNode>(helper->next<Number>()));
-                break;
-            case ExpectType::BOOL:
-                array.push_back(std::make_shared<BoolNode>(helper->next<Bool>()));
-                break;
-            case ExpectType::NULLPTR:
-                array.push_back(std::make_shared<NullNode>(helper->next<NullPtr>()));
-                break;
-            default:
-                throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
-        }
-    }
-    helper->nextChar();
-    return std::make_shared<ArrayNode>(std::move(array));
+    std::shared_ptr<JsonNode> node;
+    helper->next<Object>([&](auto ptr) {
+        node = ptr;
+    });
+    return node;
 }
 
 struct SmartPrinter {
@@ -130,20 +61,6 @@ struct SmartPrinter {
         }
         return *this;
     }
-
-/*    struct indentGuard {
-        indentGuard() = delete;
-
-        explicit indentGuard(SmartPrinter &printer) : printer(printer) {
-            printer.indent++;
-        }
-
-        ~indentGuard() {
-            printer.indent--;
-        }
-
-        SmartPrinter &printer;
-    };*/
 
     struct IndentPrintGuard {
         IndentPrintGuard() = delete;
@@ -184,7 +101,7 @@ struct SmartPrinter {
     SmartPrinter &autoAppend(this SmartPrinter &self, const JsonNode &node) {
         switch (node.getContext().getType()) {
             case JsonType::OBJECT:
-                return self(node.getData<Map>());
+                return self(node.getData<Object>());
             case JsonType::ARRAY:
                 return self(node.getData<Array>());
             case JsonType::STRING:
@@ -200,7 +117,7 @@ struct SmartPrinter {
         }
     }
 
-    SmartPrinter &operator()(this SmartPrinter &self, const Map &map) {
+    SmartPrinter &operator()(this SmartPrinter &self, const Object &map) {
         IndentPrintGuard guard{'{', '}', self};
 
         size_t i = 0;

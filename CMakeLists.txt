@@ -8,4 +8,5 @@ add_executable(JsonExercise main.cpp
         modules/BuilderHelper.hpp
         modules/Json.cpp
         modules/Json.hpp
-        modules/JsonApi.hpp)
+        modules/JsonApi.hpp
+        modules/JsonForwardDeclarations.hpp)

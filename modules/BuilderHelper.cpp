@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <unordered_set>
 #include "BuilderHelper.hpp"
+#include "Json.hpp"
 
 using namespace n_BuilderHelper;
 
@@ -13,7 +14,7 @@ ExpectType BuilderHelper::expect() {
     // try to read the next token and return the type of the token
     this->skip();
     // there are only 6 types of tokens, we need to check which type of token it is use the first character of the token
-    switch (string[at]) {
+    switch (now()) {
         case '{':
             return ExpectType::OBJECT_Start;
         case '}':
@@ -33,10 +34,10 @@ ExpectType BuilderHelper::expect() {
         case '-':
             return ExpectType::NUMBER;
         default:
-            if (string[at] >= '0' && string[at] <= '9') {
+            if (now() >= '0' && now() <= '9') {
                 return ExpectType::NUMBER;
             } else {
-                throw std::runtime_error("Invalid Character: "s + string[at] + " at position: "
+                throw std::runtime_error("Invalid Character: "s + now() + " at position: "
                                          + std::to_string(at)
                                          + "\nBecause expect cannot deduce the type of the token"
                 );
@@ -46,26 +47,26 @@ ExpectType BuilderHelper::expect() {
 
 void BuilderHelper::skip() {
     // skip empty space, enter, tab, etc.
-    while (at < string.size() && (string[at] == ' ' || string[at] == '\n' || string[at] == '\t')
-           // we also want to skip comma, : and
-           || string[at] == ',' || string[at] == ':'
+    while (at < getString().size() && (now() == ' ' || now() == '\n' || now() == '\t'
+                                       // we also want to skip comma, : and
+                                       || now() == ',' || now() == ':')
             ) {
         at++;
     }
 }
 
-const std::unordered_map<char, char> BuilderHelper::escapeMap = {
-        {'"',  '"'},
-        {'\\', '\\'},
-        {'/',  '/'},
-        {'b',  '\b'},
-        {'f',  '\f'},
-        {'n',  '\n'},
-        {'r',  '\r'},
-        {'t',  '\t'}
-};
-
 char BuilderHelper::getEscape(char c) {
+    const static std::unordered_map<char, char> escapeMap = {
+            {'"',  '"'},
+            {'\\', '\\'},
+            {'/',  '/'},
+            {'b',  '\b'},
+            {'f',  '\f'},
+            {'n',  '\n'},
+            {'r',  '\r'},
+            {'t',  '\t'}
+    };
+
     if (escapeMap.find(c) != escapeMap.end()) {
         return escapeMap.at(c);
     } else {
@@ -94,13 +95,36 @@ bool shouldStop(const char c) {
 }
 
 void BuilderHelper::ready() {
-    while (!shouldStop(string[at])) {
+    while (!shouldStop(now())) {
         at++;
     }
 }
 
 void BuilderHelper::nextChar() {
     at++;
+}
+
+const char &BuilderHelper::now() const {
+    return (*shardString)[at];
+}
+
+std::string BuilderHelper::readString() {
+    std::string result;
+    if (getString()[at] != '"') {
+        std::unreachable();
+    }
+    at++;
+    while (at < getString().size() && now() != '"') {
+        if (now() == '\\') {
+            at++;
+            result.push_back(getEscape(now()));
+        } else {
+            result.push_back(now());
+        }
+        at++;
+    }
+    at++;
+    return result;
 }
 
 std::string n_BuilderHelper::readFileIntoString(const std::string &filename) {
@@ -114,59 +138,132 @@ std::string n_BuilderHelper::readFileIntoString(const std::string &filename) {
     return buffer.str();
 }
 
+using namespace n_Json;
+
 template<>
-double BuilderHelper::next<double>() {
+void BuilderHelper::next<double>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
     size_t start = at;
-    while (at < string.size() && (string[at] == '.' || (string[at] >= '0' && string[at] <= '9')
-                                  || (string[at] == '-') || (string[at] == '+')
-                                  || (string[at] == 'e'))) {
+    while (at < getString().size() && (now() == '.' || (now() >= '0' && now() <= '9')
+                                       || (now() == '-') || (now() == '+')
+                                       || (now() == 'e'))) {
         at++;
     }
     if (at == start) {
         std::unreachable();
     }
-    return std::stod(string.substr(start, at - start));
+    provider(std::make_shared<NumberNode>(std::stod(getString().substr(start, at - start))));
 }
 
 template<>
-std::string BuilderHelper::next<std::string>() {
-    std::string result;
-    if (string[at] != '"') {
-        std::unreachable();
-    }
-    at++;
-    while (at < string.size() && string[at] != '"') {
-        if (string[at] == '\\') {
-            at++;
-            result.push_back(getEscape(string[at]));
-        } else {
-            result.push_back(string[at]);
-        }
-        at++;
-    }
-    at++;
-    return result;
+void BuilderHelper::next<std::string>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+    provider(std::make_shared<StringNode>(readString()));
 }
 
 template<>
-bool BuilderHelper::next<bool>() {
-    if (string.substr(at, 4) == "true") {
+void BuilderHelper::next<bool>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+    if (getString().substr(at, 4) == "true") {
         at += 4;
-        return true;
-    } else if (string.substr(at, 5) == "false") {
+        provider(std::make_shared<BoolNode>(true));
+    } else if (getString().substr(at, 5) == "false") {
         at += 5;
-        return false;
+        provider(std::make_shared<BoolNode>(false));
     } else {
         std::unreachable();
     }
 }
 
 template<>
-std::nullptr_t BuilderHelper::next<std::nullptr_t>() {
-    if (string.substr(at, 4) == "null") {
+void BuilderHelper::next<nullptr_t>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+    if (getString().substr(at, 4) == "null") {
         at += 4;
-        return nullptr;
+        provider(std::make_shared<NullNode>());
     } else {
         std::unreachable();
     }
+}
+
+template<>
+void BuilderHelper::next<Object>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+    Object map; // create a map to store the key value pair
+    // read K, V until we reach the end of the object
+
+    nextChar();
+
+    while (expect() != ExpectType::OBJECT_End) {
+        // read key
+        ready();
+        std::string key = readString();
+
+        // ready for read the value.
+        ready();
+
+        auto consumer = [&](std::shared_ptr<JsonNode>&& ptr) {
+            map[std::move(key)] = ptr;
+        };
+
+        switch (expect()) {
+            case ExpectType::OBJECT_Start:
+                this->next<Object>(consumer);
+                break;
+            case ExpectType::ARRAY_Start:
+                this->next<Array>(consumer);
+                break;
+            case ExpectType::STRING:
+                this->next<std::string>(consumer);
+                break;
+            case ExpectType::NUMBER:
+                this->next<double>(consumer);
+                break;
+            case ExpectType::BOOL:
+                this->next<Bool>(consumer);
+                break;
+            case ExpectType::NULLPTR:
+                this->next<nullptr_t>(consumer);
+                break;
+            default:
+                throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
+        }
+    }
+    nextChar();
+    provider(std::make_shared<ObjectNode>(std::move(map)));
+}
+
+template<>
+void BuilderHelper::next<Array>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+    Array array;
+
+    nextChar();
+
+    while (expect() != ExpectType::ARRAY_End) {
+        ready();
+
+        auto consumer = [&](std::shared_ptr<JsonNode>&& ptr) {
+            array.push_back(ptr);
+        };
+
+        switch (expect()) {
+            case ExpectType::OBJECT_Start:
+                this->next<Object>(consumer);
+                break;
+            case ExpectType::ARRAY_Start:
+                this->next<Array>(consumer);
+                break;
+            case ExpectType::STRING:
+                this->next<std::string>(consumer);
+                break;
+            case ExpectType::NUMBER:
+                this->next<Number>(consumer);
+                break;
+            case ExpectType::BOOL:
+                this->next<Bool>(consumer);
+                break;
+            case ExpectType::NULLPTR:
+                this->next<nullptr_t>(consumer);
+                break;
+            default:
+                throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
+        }
+    }
+    nextChar();
+    provider(std::make_shared<ArrayNode>(std::move(array)));
 }
