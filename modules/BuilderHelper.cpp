@@ -219,7 +219,7 @@ Object BuilderHelper::read<Object>() {
 
         ready();
         this->next([&](std::shared_ptr<JsonNode> &&ptr) {
-            map[std::move(key)] = ptr;
+            map[std::move(key)] = std::move(ptr);
         });
     }
 
@@ -237,7 +237,7 @@ Array BuilderHelper::read<Array>() {
         ready();
 
         this->next([&](std::shared_ptr<JsonNode> &&ptr) {
-            array.push_back(ptr);
+            array.push_back(std::move(ptr));
         });
     }
 
