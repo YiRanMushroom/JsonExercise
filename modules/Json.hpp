@@ -30,6 +30,8 @@ namespace n_Json {
         DataVariant data;
 
     public:
+        using dataType = void;
+
         template<typename T>
         decltype(auto) getData(this auto &&self) {
             return std::get<T>(self.data);
@@ -43,19 +45,20 @@ namespace n_Json {
 
         JsonNode &operator=(JsonNode &&) = default;
 
-        JsonNode() = default;
-
-        virtual JsonContext getContext() const {
-            std::unreachable();
-        }
+        virtual JsonContext getContext() const = 0;
 
         virtual ~JsonNode() = default;
 
         [[nodiscard]] std::string toString() const;
+
+    protected:
+        JsonNode() = default;
     };
 
     class ObjectNode : public JsonNode {
     public:
+        using dataType = Object;
+
         JsonContext getContext() const override {
             return JsonContext{JsonType::OBJECT};
         }
@@ -71,6 +74,8 @@ namespace n_Json {
 
     class ArrayNode : public JsonNode {
     public:
+        using dataType = Array;
+
         JsonContext getContext() const override {
             return JsonContext{JsonType::ARRAY};
         }
@@ -86,6 +91,8 @@ namespace n_Json {
 
     class StringNode : public JsonNode {
     public:
+        using dataType = std::string;
+
         JsonContext getContext() const override {
             return JsonContext{JsonType::STRING};
         }
@@ -101,6 +108,8 @@ namespace n_Json {
 
     class NumberNode : public JsonNode {
     public:
+        using dataType = Number;
+
         JsonContext getContext() const override {
             return JsonContext{JsonType::NUMBER};
         }
@@ -112,6 +121,8 @@ namespace n_Json {
 
     class BoolNode : public JsonNode {
     public:
+        using dataType = Bool;
+
         JsonContext getContext() const override {
             return JsonContext{JsonType::BOOL};
         }
@@ -123,6 +134,8 @@ namespace n_Json {
 
     class NullNode : public JsonNode {
     public:
+        using dataType = NullPtr;
+
         JsonContext getContext() const override {
             return JsonContext{JsonType::NULLPTR};
         }

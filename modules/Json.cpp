@@ -7,7 +7,6 @@
 
 using namespace n_Json;
 using namespace n_BuilderHelper;
-//using namespace n_Json::JsonContexts;
 
 JsonBuilder &JsonBuilder::setString(const std::string &string) {
     helper = std::make_unique<BuilderHelper>(string);
@@ -22,9 +21,8 @@ JsonBuilder &JsonBuilder::setString(std::string &&string) {
 std::shared_ptr<JsonNode> JsonBuilder::build() {
     if (helper->expect() != ExpectType::OBJECT_Start)
         throw std::runtime_error("Invalid Json Format, cannot find the start of the object '{'");
-    helper->ready();
     std::shared_ptr<JsonNode> node;
-    helper->next<Object>([&](auto ptr) {
+    helper->next<ObjectNode>([&](auto ptr) {
         node = ptr;
     });
     return node;

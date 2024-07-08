@@ -108,7 +108,50 @@ const char &BuilderHelper::now() const {
     return (*shardString)[at];
 }
 
-std::string BuilderHelper::readString() {
+template<>
+void n_BuilderHelper::BuilderHelper::next<void>(
+        const std::function<void(std::shared_ptr<n_Json::JsonNode> &&)> &provider) {
+    using namespace n_Json;
+
+    switch (expect()) {
+        case ExpectType::OBJECT_Start:
+            this->next<ObjectNode>(provider);
+            break;
+        case ExpectType::ARRAY_Start:
+            this->next<ArrayNode>(provider);
+            break;
+        case ExpectType::STRING:
+            this->next<StringNode>(provider);
+            break;
+        case ExpectType::NUMBER:
+            this->next<NumberNode>(provider);
+            break;
+        case ExpectType::BOOL:
+            this->next<BoolNode>(provider);
+            break;
+        case ExpectType::NULLPTR:
+            this->next<NullNode>(provider);
+            break;
+        default:
+            throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
+    }
+}
+
+std::string n_BuilderHelper::readFileIntoString(const std::string &filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open file " + filename);
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+using namespace n_Json;
+
+template<>
+String BuilderHelper::read<String>() {
     std::string result;
     if (getString()[at] != '"') {
         std::unreachable();
@@ -127,21 +170,8 @@ std::string BuilderHelper::readString() {
     return result;
 }
 
-std::string n_BuilderHelper::readFileIntoString(const std::string &filename) {
-    std::ifstream file(filename);
-    if (!file.is_open()) {
-        throw std::runtime_error("Could not open file " + filename);
-    }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
-}
-
-using namespace n_Json;
-
 template<>
-void BuilderHelper::next<double>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+Number BuilderHelper::read<Number>() {
     size_t start = at;
     while (at < getString().size() && (now() == '.' || (now() >= '0' && now() <= '9')
                                        || (now() == '-') || (now() == '+')
@@ -151,85 +181,54 @@ void BuilderHelper::next<double>(const std::function<void(std::shared_ptr<n_Json
     if (at == start) {
         std::unreachable();
     }
-    provider(std::make_shared<NumberNode>(std::stod(getString().substr(start, at - start))));
+    return std::stod(getString().substr(start, at - start));
 }
 
 template<>
-void BuilderHelper::next<std::string>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
-    provider(std::make_shared<StringNode>(readString()));
-}
-
-template<>
-void BuilderHelper::next<bool>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+Bool BuilderHelper::read<Bool>() {
     if (getString().substr(at, 4) == "true") {
         at += 4;
-        provider(std::make_shared<BoolNode>(true));
+        return true;
     } else if (getString().substr(at, 5) == "false") {
         at += 5;
-        provider(std::make_shared<BoolNode>(false));
+        return false;
     } else {
         std::unreachable();
     }
 }
 
 template<>
-void BuilderHelper::next<nullptr_t>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+NullPtr BuilderHelper::read<NullPtr>() {
     if (getString().substr(at, 4) == "null") {
         at += 4;
-        provider(std::make_shared<NullNode>());
+        return nullptr;
     } else {
         std::unreachable();
     }
 }
 
 template<>
-void BuilderHelper::next<Object>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+Object BuilderHelper::read<Object>() {
     Object map; // create a map to store the key value pair
-    // read K, V until we reach the end of the object
 
     nextChar();
 
     while (expect() != ExpectType::OBJECT_End) {
-        // read key
         ready();
-        std::string key = readString();
+        std::string key = read < std::string > ();
 
-        // ready for read the value.
         ready();
-
-        auto consumer = [&](std::shared_ptr<JsonNode>&& ptr) {
+        this->next([&](std::shared_ptr<JsonNode> &&ptr) {
             map[std::move(key)] = ptr;
-        };
-
-        switch (expect()) {
-            case ExpectType::OBJECT_Start:
-                this->next<Object>(consumer);
-                break;
-            case ExpectType::ARRAY_Start:
-                this->next<Array>(consumer);
-                break;
-            case ExpectType::STRING:
-                this->next<std::string>(consumer);
-                break;
-            case ExpectType::NUMBER:
-                this->next<double>(consumer);
-                break;
-            case ExpectType::BOOL:
-                this->next<Bool>(consumer);
-                break;
-            case ExpectType::NULLPTR:
-                this->next<nullptr_t>(consumer);
-                break;
-            default:
-                throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
-        }
+        });
     }
+
     nextChar();
-    provider(std::make_shared<ObjectNode>(std::move(map)));
+    return map;
 }
 
 template<>
-void BuilderHelper::next<Array>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
+Array BuilderHelper::read<Array>() {
     Array array;
 
     nextChar();
@@ -237,33 +236,12 @@ void BuilderHelper::next<Array>(const std::function<void(std::shared_ptr<n_Json:
     while (expect() != ExpectType::ARRAY_End) {
         ready();
 
-        auto consumer = [&](std::shared_ptr<JsonNode>&& ptr) {
+        this->next([&](std::shared_ptr<JsonNode> &&ptr) {
             array.push_back(ptr);
-        };
-
-        switch (expect()) {
-            case ExpectType::OBJECT_Start:
-                this->next<Object>(consumer);
-                break;
-            case ExpectType::ARRAY_Start:
-                this->next<Array>(consumer);
-                break;
-            case ExpectType::STRING:
-                this->next<std::string>(consumer);
-                break;
-            case ExpectType::NUMBER:
-                this->next<Number>(consumer);
-                break;
-            case ExpectType::BOOL:
-                this->next<Bool>(consumer);
-                break;
-            case ExpectType::NULLPTR:
-                this->next<nullptr_t>(consumer);
-                break;
-            default:
-                throw std::runtime_error("Invalid Json Format, cannot deduce the type of the token");
-        }
+        });
     }
+
     nextChar();
-    provider(std::make_shared<ArrayNode>(std::move(array)));
+    return array;
 }
+

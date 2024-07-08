@@ -9,16 +9,24 @@
 
 namespace n_BuilderHelper {
     class BuilderHelper {
+        friend class n_Json::JsonBuilder;
+
     public:
         explicit BuilderHelper(const std::string &string) : shardString(std::make_shared<std::string>(string)) {}
 
         explicit BuilderHelper(std::string &&string) : shardString(std::make_shared<std::string>(std::move(string))) {}
 
+    private:
         ExpectType expect();
 
         template<typename T>
-        void next(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider) {
-            std::unreachable();
+        T read() {
+            throw std::exception("Type not supported");
+        };
+
+        template<typename NodeType = void>
+        void next(const std::function<void(std::shared_ptr<n_Json::JsonNode> &&)> &provider) {
+            provider(std::make_shared<NodeType>(this->read<typename NodeType::dataType>()));
         }
 
         void skip();
@@ -28,8 +36,6 @@ namespace n_BuilderHelper {
         void ready();
 
         void nextChar();
-
-        std::string readString();
 
         [[nodiscard]] const char &now() const;
 
@@ -50,22 +56,26 @@ namespace n_BuilderHelper {
     };
 
     template<>
-    void BuilderHelper::next<double>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+    double BuilderHelper::read<double>();
 
     template<>
-    void BuilderHelper::next<std::string>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+    bool BuilderHelper::read<bool>();
 
     template<>
-    void BuilderHelper::next<bool>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+    nullptr_t BuilderHelper::read<nullptr_t>();
 
     template<>
-    void BuilderHelper::next<n_Json::Object>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+    std::string BuilderHelper::read<std::string>();
 
     template<>
-    void BuilderHelper::next<n_Json::Array>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+    n_Json::Object BuilderHelper::read<n_Json::Object>();
 
     template<>
-    void BuilderHelper::next<std::nullptr_t>(const std::function<void(std::shared_ptr<n_Json::JsonNode>&&)> &provider);
+    n_Json::Array BuilderHelper::read<n_Json::Array>();
+
+    template<>
+    void n_BuilderHelper::BuilderHelper::next<void>(
+            const std::function<void(std::shared_ptr<n_Json::JsonNode> &&)> &provider);
 
     std::string readFileIntoString(const std::string &filename);
 }
