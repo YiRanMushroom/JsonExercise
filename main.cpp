@@ -17,12 +17,11 @@ int main() {
 
     std::shared_ptr<JsonNode> node;
 
-    try {
-        node = builder.build();
-    } catch (std::exception &e) {
-        std::cerr << e.what() << std::endl;
-        return 1;
-    }
+    node = builder.build();
 
-    std::cout << node->toString() << std::endl;
+    node->getData<Object>()["Hello"]->operator=(*node);
+
+    ObjectNode objectNode(*node);
+
+    std::cout << objectNode.toString() << std::endl;
 }
