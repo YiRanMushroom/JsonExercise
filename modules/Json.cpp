@@ -63,11 +63,11 @@ struct SmartPrinter {
     struct IndentPrintGuard {
         IndentPrintGuard() = delete;
 
-        const char left, right;
+        const char right;
 
         SmartPrinter &printer;
 
-        IndentPrintGuard(const char left, const char right, SmartPrinter &printer) : left(left), right(right),
+        IndentPrintGuard(const char left, const char right, SmartPrinter &printer) : right(right),
                                                                                      printer(printer) {
             printer << left;
             printer.indent++;

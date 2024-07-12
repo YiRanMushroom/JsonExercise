@@ -19,7 +19,7 @@ int main() {
 
     node = builder.build();
 
-    node->getData<Object>()["Hello"]->operator=(*node);
+    node->getData<Object>()["Hello"]->set(node);
 
     ObjectNode objectNode(*node);
 

@@ -33,7 +33,7 @@ namespace n_Json {
         using dataType = void;
 
         template<typename T>
-        decltype(auto) getData(this auto &&self) {
+        auto getData(this auto &&self) -> decltype(std::get<T>(self.data)) {
             return std::get<T>(self.data);
         }
 
@@ -49,9 +49,7 @@ namespace n_Json {
             throw std::logic_error("getContext() is not implemented for base class");
         }
 
-        virtual ~JsonNode() {
-
-        };
+        virtual ~JsonNode() = default;
 
         [[nodiscard]] std::string toString() const;
 
@@ -90,6 +88,7 @@ namespace n_Json {
     class ObjectNode : public JsonNode {
     public:
         DeclareConsAndAssign(ObjectNode)
+
         using dataType = Object;
 
         JsonContext getContext() const override {
@@ -110,6 +109,7 @@ namespace n_Json {
     class ArrayNode : public JsonNode {
     public:
         DeclareConsAndAssign(ArrayNode)
+
         using dataType = Array;
 
         JsonContext getContext() const override {
@@ -130,6 +130,7 @@ namespace n_Json {
     class StringNode : public JsonNode {
     public:
         DeclareConsAndAssign(StringNode)
+
         using dataType = std::string;
 
         JsonContext getContext() const override {
@@ -150,6 +151,7 @@ namespace n_Json {
     class NumberNode : public JsonNode {
     public:
         DeclareConsAndAssign(NumberNode)
+
         using dataType = Number;
 
         JsonContext getContext() const override {
@@ -166,6 +168,7 @@ namespace n_Json {
     class BoolNode : public JsonNode {
     public:
         DeclareConsAndAssign(BoolNode)
+
         using dataType = Bool;
 
         JsonContext getContext() const override {
@@ -182,6 +185,7 @@ namespace n_Json {
     class NullNode : public JsonNode {
     public:
         DeclareConsAndAssign(NullNode)
+
         using dataType = NullPtr;
 
         JsonContext getContext() const override {
