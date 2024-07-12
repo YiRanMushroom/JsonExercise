@@ -1,218 +1,77 @@
 #pragma once
 
-#include <string>
-#include <memory>
-#include <unordered_map>
-#include <map>
 #include <variant>
-#include <iostream>
-#include "JsonForwardDeclarations.hpp"
-#include "BuilderHelper.hpp"
+#include <any>
+#include "JsonForwardHeader.hpp"
 
-namespace n_Json {
 
-    struct JsonContext {
+namespace Json {
+    class Json {
     private:
-        JsonType type;
+        std::variant<String, Object, Array, Number, Bool, NullPtr> data;
 
     public:
-        [[nodiscard]] JsonType getType() const {
-            return type;
-        }
-
-        JsonContext() = delete;
-
-        explicit JsonContext(const JsonType type) : type(type) {}
-    };
-
-    class JsonNode {
-    protected:
-        DataVariant data;
-
-    public:
-        using dataType = void;
-
-        template<typename T>
-        auto getData(this auto &&self) -> decltype(std::get<T>(self.data)) {
+        template<class T>
+        decltype(auto) get(this auto &&self) {
             return std::get<T>(self.data);
         }
 
-        DataVariant &get() {
+        decltype(auto) visit(this auto &&self, auto&& visitor) {
+            return std::visit(visitor, self.data);
+        }
+
+/*        [[nodiscard]] const std::variant<String, Object, Array, Number,
+                Bool, NullPtr> &getData() const {
             return data;
+        }*/
+
+        [[nodiscard]] DataType what() const {
+            constexpr struct {
+                DataType operator()(const String &) const { return DataType::STRING; }
+
+                DataType operator()(const Object &) const { return DataType::OBJECT; }
+
+                DataType operator()(const Array &) const { return DataType::ARRAY; }
+
+                DataType operator()(const Number &) const { return DataType::NUMBER; }
+
+                DataType operator()(const Bool &) const { return DataType::BOOL; }
+
+                DataType operator()(const NullPtr &) const { return DataType::NULLPTR; }
+            } visitor;
+
+            return std::visit(visitor, data);
         }
 
-        [[nodiscard]] const DataVariant &get() const {
-            return data;
-        }
+        Json() : data(nullptr) {};
 
-        virtual JsonContext getContext() const {
-            throw std::logic_error("getContext() is not implemented for base class");
-        }
+        // Now declare the common constructors, we want copy and move constructors, also assign operators
+        Json(const Json &other) = default;
 
-        virtual ~JsonNode() = default;
+        Json(Json &&other) = default;
 
-        [[nodiscard]] std::string toString() const;
+        Json &operator=(const Json &other) = default;
 
-        void set(const std::shared_ptr<JsonNode> &);
+        Json &operator=(Json &&other) = default;
 
-        void set(std::shared_ptr<JsonNode> &&);
+        // Now declare the constructors, we want copy and move constructors for non-trivial types
 
-        [[nodiscard]] virtual JsonNode deepCopy() const {
-            throw std::logic_error("deepCopy() is not implemented for base class");
-        }
+        explicit Json(const std::string &str) : data(str) {}
 
-        JsonNode() = default;
+        explicit Json(std::string &&str) : data(std::move(str)) {}
 
-        JsonNode(const JsonNode &);
+        explicit Json(const Object &obj) : data(obj) {}
 
-        JsonNode &operator=(const JsonNode &);
+        explicit Json(Object &&obj) : data(std::move(obj)) {}
 
-        JsonNode(JsonNode &&);
+        explicit Json(const Array &arr) : data(arr) {}
 
-        JsonNode &operator=(JsonNode &&);
+        explicit Json(Array &&arr) : data(std::move(arr)) {}
 
-    protected:
+        explicit Json(const Number num) : data(num) {}
 
-    };
+        explicit Json(const Bool b) : data(b) {}
 
-#define DeclareConsAndAssign(Type) \
-    Type(const JsonNode& v) : JsonNode(v){} \
-    Type(JsonNode&& v) : JsonNode(std::move(v)){} \
-    JsonNode& operator= (const JsonNode& v){    \
-        return (JsonNode&) (*this) = v;\
-    }                              \
-    JsonNode& operator= (JsonNode&& v){    \
-        return (JsonNode&) (*this) = std::move(v); \
-    }
-
-    class ObjectNode : public JsonNode {
-    public:
-        DeclareConsAndAssign(ObjectNode)
-
-        using dataType = Object;
-
-        JsonContext getContext() const override {
-            return JsonContext{JsonType::OBJECT};
-        }
-
-        explicit ObjectNode(const Object &data) {
-            this->data = data;
-        }
-
-        explicit ObjectNode(Object &&data) {
-            this->data = std::move(data);
-        }
-
-        JsonNode deepCopy() const override;
-    };
-
-    class ArrayNode : public JsonNode {
-    public:
-        DeclareConsAndAssign(ArrayNode)
-
-        using dataType = Array;
-
-        JsonContext getContext() const override {
-            return JsonContext{JsonType::ARRAY};
-        }
-
-        explicit ArrayNode(const Array &data) {
-            this->data = data;
-        }
-
-        explicit ArrayNode(Array &&data) {
-            this->data = std::move(data);
-        }
-
-        JsonNode deepCopy() const override;
-    };
-
-    class StringNode : public JsonNode {
-    public:
-        DeclareConsAndAssign(StringNode)
-
-        using dataType = std::string;
-
-        JsonContext getContext() const override {
-            return JsonContext{JsonType::STRING};
-        }
-
-        explicit StringNode(const String &data) {
-            this->data = data;
-        }
-
-        explicit StringNode(String &&data) {
-            this->data = std::move(data);
-        }
-
-        JsonNode deepCopy() const override;
-    };
-
-    class NumberNode : public JsonNode {
-    public:
-        DeclareConsAndAssign(NumberNode)
-
-        using dataType = Number;
-
-        JsonContext getContext() const override {
-            return JsonContext{JsonType::NUMBER};
-        }
-
-        explicit NumberNode(const Number data) {
-            this->data = data;
-        }
-
-        JsonNode deepCopy() const override;
-    };
-
-    class BoolNode : public JsonNode {
-    public:
-        DeclareConsAndAssign(BoolNode)
-
-        using dataType = Bool;
-
-        JsonContext getContext() const override {
-            return JsonContext{JsonType::BOOL};
-        }
-
-        explicit BoolNode(const Bool data) {
-            this->data = data;
-        }
-
-        JsonNode deepCopy() const override;
-    };
-
-    class NullNode : public JsonNode {
-    public:
-        DeclareConsAndAssign(NullNode)
-
-        using dataType = NullPtr;
-
-        JsonContext getContext() const override {
-            return JsonContext{JsonType::NULLPTR};
-        }
-
-        explicit NullNode(const NullPtr data) {
-            this->data = data;
-        }
-
-        NullNode() {
-            this->data = nullptr;
-        }
-
-        JsonNode deepCopy() const override;
-    };
-
-    class JsonBuilder {
-    private:
-        std::unique_ptr<n_BuilderHelper::BuilderHelper> helper;
-    public:
-        JsonBuilder() = default;
-
-        JsonBuilder &setString(const std::string &string);
-
-        JsonBuilder &setString(std::string &&string);
-
-        std::shared_ptr<JsonNode> build();
+        [[nodiscard]] std::string deserialize();
     };
 }
