@@ -4,9 +4,13 @@ project(JsonExercise)
 set(CMAKE_CXX_STANDARD 23)
 
 add_executable(JsonExercise main.cpp
-        modules/BuilderHelper.cpp
-        modules/BuilderHelper.hpp
+#        modules/deprecated/BuilderHelper.cpp
+#        modules/deprecated/BuilderHelper.hpp
+#        modules/deprecated/Json.cpp
+#        modules/deprecated/Json.hpp
+#        modules/deprecated/JsonApi.hpp
+#        modules/deprecated/JsonForwardDeclarations.hpp
+        modules/JsonForwardHeader.hpp
         modules/Json.cpp
         modules/Json.hpp
-        modules/JsonApi.hpp
-        modules/JsonForwardDeclarations.hpp)
+        modules/JsonImpl.cpp)
