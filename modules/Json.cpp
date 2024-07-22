@@ -74,9 +74,9 @@ namespace Json {
             return *this;
         }
 
-        SmartPrinter &autoAppend(const Json &json) {
+/*        SmartPrinter &autoAppend(const Json &json) {
             return json.visit(*this);
-        }
+        }*/
 
         SmartPrinter &operator()(const Object &map) {
             IndentPrintGuard guard{'{', '}', *this};
@@ -84,7 +84,7 @@ namespace Json {
             size_t i = 0;
             const size_t lastIndex = map.size() - 1;
             for (auto &&[K, V]: map) {
-                (*this << '"' << K << '"').colonSpace().autoAppend(V);
+                V.visit((*this << '"' << K << '"').colonSpace());
                 if (i++ != lastIndex) this->commaNextLine();
             }
 
@@ -95,11 +95,10 @@ namespace Json {
             IndentPrintGuard guard{'[', ']', *this};
 
             for (size_t i = 0; i < array.size() - 1; i++) {
-                this->autoAppend(array[i]).commaNextLine();
+                array[i].visit(*this).commaNextLine();
             }
-            this->autoAppend(array.back());
 
-            return *this;
+            return array.back().visit(*this);
         }
 
         SmartPrinter &operator()(const Number number) {
@@ -141,7 +140,7 @@ namespace Json {
         }
     };
 
-    std::string Json::deserialize() {
+    std::string Json::toString() {
         return this->visit(SmartPrinter{}).build();
     }
 }

@@ -13,4 +13,7 @@ add_executable(JsonExercise main.cpp
         modules/JsonForwardHeader.hpp
         modules/Json.cpp
         modules/Json.hpp
-        modules/JsonImpl.cpp)
+        modules/JsonImpl.cpp
+        examples/student.hpp
+        examples/Impl.cpp
+        examples/test_example.hpp)
